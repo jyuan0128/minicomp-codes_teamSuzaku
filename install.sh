@@ -1,6 +1,6 @@
 # /bin/bash
-set -euo pipefall
+set -euo pipefail
 
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-uv sync`
+uv sync
