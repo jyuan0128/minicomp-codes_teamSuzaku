@@ -1,5 +1,11 @@
 # minicomp-evaluator
 
+## ダウンロード
+```bash
+$ git clone https://github.com/llmcompe2025-team-semishigure/minicomp-evaluator.git
+$ cd minicomp-evaluator
+```
+
 ## インストール
 ```bash
 $ bash install.sh
@@ -7,7 +13,7 @@ $ bash install.sh
 
 ##  評価の実行
 ```bash
-$ ibash run.sh
+$ bash run.sh
 ```
 
 
