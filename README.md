@@ -2,12 +2,12 @@
 
 ## インストール
 ```bash
-$ ./install.sh
+$ bash install.sh
 ```
 
 ##  評価の実行
 ```bash
-$ ./run.sh
+$ ibash run.sh
 ```
 
 
