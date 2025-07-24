@@ -11,6 +11,13 @@ $ cd minicomp-evaluator
 $ bash install.sh
 ```
 
+```bash
+$ uv run huggingface-cli login
+```
+
+- テストデータにgpqaを使用しています。[こちら](https://huggingface.co/datasets/Idavidrein/gpqa)にアクセスして、アクセス件を取得してください
+
+
 ##  評価の実行
 ```bash
 $ bash run.sh
