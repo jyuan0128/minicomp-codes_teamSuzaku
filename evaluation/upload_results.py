@@ -135,7 +135,6 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
         wandb.log(average_metrics)
     
     # サマリーテーブルを作成
-    # summary_data = []
     each_metrics_data = []
     for result in all_results:
         if "metrics" in result:
