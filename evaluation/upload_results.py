@@ -6,6 +6,7 @@
 import json
 import os
 import glob
+import sys
 from pathlib import Path
 import wandb
 from typing import Dict, List, Any
@@ -34,17 +35,7 @@ def extract_metrics_from_results(results: Dict[str, Any]) -> Dict[str, float]:
             for nested_key, nested_value in nested_metrics.items():
                 metrics[f"{key}_{nested_key}"] = nested_value
         elif isinstance(value, (int, float)):
-            # @Kのパターンをチェック
-            if "@" in key:
-                # @Kの場合はK=1の値のみを使用
-                if ":1_samples" in key or "@1:" in key:
-                    # メトリクス名から@Kの部分を除去
-                    clean_key = re.sub(r'@\d+:\d+_samples', '', key)
-                    clean_key = re.sub(r'@\d+:', '', clean_key)
-                    metrics[clean_key] = value
-            else:
-                # @Kでない場合はそのまま使用
-                metrics[key] = value
+            metrics[key] = value
     
     return metrics
 
@@ -97,18 +88,21 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
     representative_metric = []
     for result in all_results:
         if "metrics" in result:
+            print(result["task_name"])
+            print(result["metrics"].keys())
             for metric_name in result["metrics"].keys():
                 if task_metrics[result["task_name"]] == metric_name:
                     representative_metric.append(result["metrics"][metric_name])
+    print(representative_metric)
     return {"average": np.mean(representative_metric)}
 
-def upload_to_wandb(all_results: List[Dict[str, Any]], average_metrics: Dict[str, float]):
+def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_metrics: Dict[str, float]):
     """結果をwandbにアップロード"""
     # wandbの初期化
     wandb.init(
         project="minicomp-test",
         entity="LLMcompe-Team-Watanabe",
-        name="evaluation_summary",
+        name=run_name,
         config={
             "num_tasks": len(all_results),
             "tasks": [result.get("task_name", "unknown") for result in all_results]
@@ -155,6 +149,11 @@ def upload_to_wandb(all_results: List[Dict[str, Any]], average_metrics: Dict[str
     wandb.finish()
 
 def main():
+    training_config_path = sys.argv[1]
+    with open(training_config_path, "r") as f:
+        training_config = json.load(f)
+    run_name = training_config["run_name"]
+    
     """メイン関数"""
     # 評価対象のタスク
     tasks = ["gsm8k", "aime24", "gpqa-diamond"]

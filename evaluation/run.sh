@@ -29,4 +29,4 @@ uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
     --output-dir $OUTPUT_DIR/$TASK_DIR
 
-uv run upload_results.py
+uv run upload_results.py "train_configs.json"
