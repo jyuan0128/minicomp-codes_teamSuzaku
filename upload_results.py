@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""
+評価結果をまとめてwandbにアップロードするスクリプト
+"""
+
+import json
+import os
+import glob
+from pathlib import Path
+import wandb
+from typing import Dict, List, Any
+import re
+import numpy as np
+
+def find_latest_result_file(task_dir: str) -> str:
+    """タスクディレクトリ内の最新の結果ファイルを見つける"""
+    pattern = os.path.join(task_dir, "results", "**", "*.json")
+    result_files = glob.glob(pattern, recursive=True)
+    
+    if not result_files:
+        raise FileNotFoundError(f"No result files found in {task_dir}")
+    
+    # 最新のファイルを返す（ファイル名にタイムスタンプが含まれているため）
+    return max(result_files, key=os.path.getctime)
+
+def extract_metrics_from_results(results: Dict[str, Any]) -> Dict[str, float]:
+    """結果からメトリクスを抽出し、@Kの場合はK=1の値を使用"""
+    metrics = {}
+    
+    for key, value in results.items():
+        if isinstance(value, dict):
+            # ネストした辞書の場合は再帰的に処理
+            nested_metrics = extract_metrics_from_results(value)
+            for nested_key, nested_value in nested_metrics.items():
+                metrics[f"{key}_{nested_key}"] = nested_value
+        elif isinstance(value, (int, float)):
+            # @Kのパターンをチェック
+            if "@" in key:
+                # @Kの場合はK=1の値のみを使用
+                if ":1_samples" in key or "@1:" in key:
+                    # メトリクス名から@Kの部分を除去
+                    clean_key = re.sub(r'@\d+:\d+_samples', '', key)
+                    clean_key = re.sub(r'@\d+:', '', clean_key)
+                    metrics[clean_key] = value
+            else:
+                # @Kでない場合はそのまま使用
+                metrics[key] = value
+    
+    return metrics
+
+def load_task_results(task_name: str, eval_results_dir: str = "eval_results") -> Dict[str, Any]:
+    """タスクの結果を読み込む"""
+    task_dir = os.path.join(eval_results_dir, task_name)
+    
+    if not os.path.exists(task_dir):
+        print(f"Warning: Task directory {task_dir} not found")
+        return {}
+    
+    try:
+        result_file = find_latest_result_file(task_dir)
+        print(f"Loading results from: {result_file}")
+        
+        with open(result_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # 結果からメトリクスを抽出
+        if "results" in data:
+            task_results = {}
+            for result_key, result_data in data["results"].items():
+                if result_key != "all":  # "all"以外の結果を使用
+                    metrics = extract_metrics_from_results(result_data)
+                    task_results.update(metrics)
+            
+            return {
+                "task_name": task_name,
+                "metrics": task_results,
+                "model_name": data.get("config_general", {}).get("model_name", "unknown"),
+                "evaluation_time": data.get("config_general", {}).get("total_evaluation_time_secondes", "unknown")
+            }
+    
+    except Exception as e:
+        print(f"Error loading results for {task_name}: {e}")
+        return {}
+
+def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, float]:
+    """全タスクの平均値を計算"""
+    if not all_results:
+        return {}
+
+    task_metrics = {
+        "gsm8k": "extractive_match",
+        "aime24": "math_pass@1:1_samples",
+        "gpqa-diamond": "gpqa_pass@1:1_samples" 
+    } 
+
+    # 全メトリクス名を収集
+    representative_metric = []
+    for result in all_results:
+        if "metrics" in result:
+            for metric_name in result["metrics"].keys():
+                if task_metrics[result["task_name"]] == metric_name:
+                    representative_metric.append(result["metrics"][metric_name])
+    return {"average": np.mean(representative_metric)}
+
+def upload_to_wandb(all_results: List[Dict[str, Any]], average_metrics: Dict[str, float]):
+    """結果をwandbにアップロード"""
+    # wandbの初期化
+    wandb.init(
+        project="minicomp-test",
+        entity="LLMcompe-Team-Watanabe",
+        name="evaluation_summary",
+        config={
+            "num_tasks": len(all_results),
+            "tasks": [result.get("task_name", "unknown") for result in all_results]
+        }
+    )
+    
+    # 各タスクの結果をログ
+    for result in all_results:
+        if "metrics" in result:
+            task_name = result.get("task_name", "unknown")
+            metrics = result["metrics"]
+            
+            # タスク名をプレフィックスとして追加
+            prefixed_metrics = {f"{task_name}_{k}": v for k, v in metrics.items()}
+            wandb.log(prefixed_metrics)
+    
+    # 平均値をログ
+    if average_metrics:
+        wandb.log(average_metrics)
+    
+    # サマリーテーブルを作成
+    summary_data = []
+    for result in all_results:
+        if "metrics" in result:
+            row = {
+                "task": result.get("task_name", "unknown"),
+                "model": result.get("model_name", "unknown"),
+                "evaluation_time": result.get("evaluation_time", "unknown")
+            }
+            row.update(result["metrics"])
+            summary_data.append(row)
+    
+    # 平均値の行を追加
+    if average_metrics:
+        avg_row = {"task": "average", "model": "all", "evaluation_time": "N/A"}
+        avg_row.update(average_metrics)
+        summary_data.append(avg_row)
+    
+    # テーブルを作成してログ
+    if summary_data:
+        table = wandb.Table(data=summary_data)
+        wandb.log({"evaluation_summary": table})
+    
+    wandb.finish()
+
+def main():
+    """メイン関数"""
+    # 評価対象のタスク
+    tasks = ["gsm8k", "aime24", "gpqa-diamond"]
+    
+    print("Loading evaluation results...")
+    
+    # 各タスクの結果を読み込み
+    all_results = []
+    for task in tasks:
+        print(f"\nProcessing task: {task}")
+        result = load_task_results(task)
+        if result:
+            all_results.append(result)
+            print(f"  Loaded {len(result.get('metrics', {}))} metrics")
+        else:
+            print(f"  No results found for {task}")
+    
+    if not all_results:
+        print("No results found for any task!")
+        return
+    
+    # 平均値を計算
+    print("\nCalculating averages...")
+    average_metrics = calculate_average_metrics(all_results)
+    print(f"Calculated {len(average_metrics)} average metrics")
+    
+    # 結果を表示
+    print("\n=== Task Results ===")
+    for result in all_results:
+        task_name = result.get("task_name", "unknown")
+        metrics = result.get("metrics", {})
+        print(f"\n{task_name}:")
+        for metric_name, value in metrics.items():
+            print(f"  {metric_name}: {value:.4f}")
+    
+    print("\n=== Average Results ===")
+    print(f"Average metrics: {average_metrics['average']:.4f}")
+    
+    # wandbにアップロード
+    print("\nUploading to wandb...")
+    try:
+        upload_to_wandb(all_results, average_metrics)
+        print("Successfully uploaded to wandb!")
+    except Exception as e:
+        print(f"Error uploading to wandb: {e}")
+
+if __name__ == "__main__":
+    main() 
