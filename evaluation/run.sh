@@ -14,12 +14,14 @@ TASK="gsm8k"
 TASK_DIR=$(sanitize_task_name "$TASK")
 uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
+    --save-details \
     --output-dir $OUTPUT_DIR/$TASK_DIR \
 
 TASK="aime24"
 TASK_DIR=$(sanitize_task_name "$TASK")
 uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
+    --save-details \
     --output-dir $OUTPUT_DIR/$TASK_DIR
 
 
@@ -27,6 +29,7 @@ TASK="gpqa:diamond"
 TASK_DIR=$(sanitize_task_name "$TASK")
 uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
+    --save-details \
     --output-dir $OUTPUT_DIR/$TASK_DIR
 
 uv run upload_results.py "train_configs.json"
