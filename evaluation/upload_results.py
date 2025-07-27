@@ -84,8 +84,12 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
     task_metrics = {
         "gsm8k": "extractive_match",
         "aime24": "math_pass@1:1_samples",
-        "gpqa-diamond": "gpqa_pass@1:1_samples" 
+        "gpqa-diamond": "gpqa_pass@1:1_samples",
+        "truthfulqa-mc": "mc_pass@1:1_samples",
+        "toxigen": "acc_norm"
     } 
+    weights = [0.3, 0.3, 0.3, 0.05, 0.05]
+    eval_metrics = {"average": 0.0}
 
     # 全メトリクス名を収集
     representative_metric = []
@@ -96,8 +100,11 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
             for metric_name in result["metrics"].keys():
                 if task_metrics[result["task_name"]] == metric_name:
                     representative_metric.append(result["metrics"][metric_name])
+                    rep_name = result["task_name"] + "/" + metric_name
+                    eval_metrics[rep_name] = result["metrics"][metric_name]
     print(representative_metric)
-    return {"average": np.mean(representative_metric)}
+    eval_metrics["average"] = np.average(representative_metric, weights=weights)
+    return eval_metrics
 
 def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_metrics: Dict[str, float]):
     """結果をwandbにアップロード"""
@@ -149,18 +156,18 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
     # 平均値の行を追加
     average_metrics_data = []
     if average_metrics:
-        avg_row = {"task": "average", "model": "all", "evaluation_time": "N/A"}
+        avg_row = {"run_name": run_name} 
         avg_row.update(average_metrics)
         average_metrics_data.append(avg_row)
     
 
     # テーブルを作成してログ
-    if each_metrics_data:
-        table = wandb.Table(dataframe=pd.DataFrame(each_metrics_data))
-        wandb.log({"Evaluation Metrics Table": table})
     if average_metrics_data:
         table = wandb.Table(data=pd.DataFrame(average_metrics_data))
         wandb.log({"Evaluation Average Score Table": table})
+    if each_metrics_data:
+        table = wandb.Table(dataframe=pd.DataFrame(each_metrics_data))
+        wandb.log({"Evaluation Metrics Table": table})
     if detailed_log_paths:
         df_list = []
         for task, path in detailed_log_paths.items():
@@ -185,7 +192,7 @@ def main():
     
     """メイン関数"""
     # 評価対象のタスク
-    tasks = ["gsm8k", "aime24", "gpqa-diamond"]
+    tasks = ["gsm8k", "aime24", "gpqa-diamond", "truthfulqa-mc", "toxigen"]
     
     print("Loading evaluation results...")
     
