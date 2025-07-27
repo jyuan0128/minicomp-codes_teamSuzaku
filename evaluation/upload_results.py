@@ -11,7 +11,10 @@ from pathlib import Path
 import wandb
 from typing import Dict, List, Any
 import re
+
 import numpy as np
+import pandas as pd
+
 
 def find_latest_result_file(task_dir: str) -> str:
     """タスクディレクトリ内の最新の結果ファイルを見つける"""
@@ -118,13 +121,21 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
             # タスク名をプレフィックスとして追加
             prefixed_metrics = {f"{task_name}_{k}": v for k, v in metrics.items()}
             wandb.log(prefixed_metrics)
+
+    # input, prediction, answerが記録された最新のlogファイルのpathを取得
+    tasks = set([result["task_name"] for result in all_results])
+    detailed_log_paths = {task: list(Path(f"./eval_results/{task}/details").glob("**/*.parquet")) for task in tasks}
+    detailed_log_paths = {
+        k: max(v, key=lambda x: x.stat().st_mtime)
+        for k, v in detailed_log_paths.items() if v
+    }
     
     # 平均値をログ
     if average_metrics:
         wandb.log(average_metrics)
     
     # サマリーテーブルを作成
-    summary_data = []
+    each_metrics_data = []
     for result in all_results:
         if "metrics" in result:
             row = {
@@ -133,18 +144,36 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
                 "evaluation_time": result.get("evaluation_time", "unknown")
             }
             row.update(result["metrics"])
-            summary_data.append(row)
+            each_metrics_data.append(row)
     
     # 平均値の行を追加
+    average_metrics_data = []
     if average_metrics:
         avg_row = {"task": "average", "model": "all", "evaluation_time": "N/A"}
         avg_row.update(average_metrics)
-        summary_data.append(avg_row)
+        average_metrics_data.append(avg_row)
     
+
     # テーブルを作成してログ
-    if summary_data:
-        table = wandb.Table(data=summary_data)
-        wandb.log({"evaluation_summary": table})
+    if each_metrics_data:
+        table = wandb.Table(dataframe=pd.DataFrame(each_metrics_data))
+        wandb.log({"Evaluation Metrics Table": table})
+    if average_metrics_data:
+        table = wandb.Table(data=pd.DataFrame(average_metrics_data))
+        wandb.log({"Evaluation Average Score Table": table})
+    if detailed_log_paths:
+        df_list = []
+        for task, path in detailed_log_paths.items():
+            df = pd.read_parquet(path, columns=["example", "predictions", "gold"])
+            # wandbのUIで表示されるように、np.arrayからstringに変換
+            df[["example", "predictions", "gold"]] = df[["example", "predictions", "gold"]].applymap(
+                lambda x: "\n".join(x.tolist()) if isinstance(x, np.ndarray) else str(x)
+            )
+            df["dataset"] = task
+            df_list.append(df)
+            
+        table = wandb.Table(dataframe=pd.concat(objs=df_list, ignore_index=True)[["dataset", "example", "predictions", "gold"]])
+        wandb.log({"Evaluation Samples Table": table})
     
     wandb.finish()
 
@@ -195,7 +224,7 @@ def main():
     # wandbにアップロード
     print("\nUploading to wandb...")
     try:
-        upload_to_wandb(all_results, average_metrics)
+        upload_to_wandb(run_name, all_results, average_metrics)
         print("Successfully uploaded to wandb!")
     except Exception as e:
         print(f"Error uploading to wandb: {e}")
