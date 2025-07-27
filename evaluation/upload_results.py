@@ -165,6 +165,8 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
         avg_row.update(average_metrics)
         average_metrics_data.append(avg_row)
     
+    wandb.save("config.yaml")
+    wandb.save("train_config.json")
 
     # テーブルを作成してログ
     if log_training_config:
@@ -192,6 +194,7 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
         table = wandb.Table(dataframe=pd.concat(objs=df_list, ignore_index=True)[["dataset", "example", "predictions", "gold"]])
         wandb.log({"Evaluation Samples Table": table})
         print("Evaluation Samples Table logged")
+
     
     wandb.finish()
 
@@ -200,7 +203,7 @@ def main():
     with open(training_config_path, "r") as f:
         training_config = json.load(f)
     run_name = training_config["run_name"]
-    with open("config.yaml", "r") as f:
+    with open("eval_config.yaml", "r") as f:
         generation_config = yaml.safe_load(f)["model_parameters"]["generation_parameters"]
     training_config["generation_parameters"] = generation_config
     log_training_config = convert_train_params_to_flat(training_config)
