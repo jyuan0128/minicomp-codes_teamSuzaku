@@ -106,7 +106,18 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
     eval_metrics["average"] = np.average(representative_metric, weights=weights)
     return eval_metrics
 
-def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_metrics: Dict[str, float]):
+def convert_train_params_to_flat(train_params: Dict[str, Any]) -> Dict[str, Any]:
+    """train_paramsをフラットな形式に変換"""
+    flat_params = {}
+    for key, value in train_params.items():
+        if isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                flat_params[f"{key}_{sub_key}"] = sub_value
+        else:
+            flat_params[key] = value
+    return flat_params
+
+def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_metrics: Dict[str, float], log_training_config: Dict[str, Any]):
     """結果をwandbにアップロード"""
     # wandbの初期化
     wandb.init(
@@ -168,6 +179,9 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
     if each_metrics_data:
         table = wandb.Table(dataframe=pd.DataFrame(each_metrics_data))
         wandb.log({"Evaluation Metrics Table": table})
+    if log_training_config:
+        table = wandb.Table(dataframe=pd.DataFrame(log_training_config))
+        wandb.log({"Training Config Table": table})
     if detailed_log_paths:
         df_list = []
         for task, path in detailed_log_paths.items():
@@ -189,6 +203,7 @@ def main():
     with open(training_config_path, "r") as f:
         training_config = json.load(f)
     run_name = training_config["run_name"]
+    log_training_config = convert_train_params_to_flat(training_config)
     
     """メイン関数"""
     # 評価対象のタスク
@@ -231,7 +246,7 @@ def main():
     # wandbにアップロード
     print("\nUploading to wandb...")
     try:
-        upload_to_wandb(run_name, all_results, average_metrics)
+        upload_to_wandb(run_name, all_results, average_metrics, log_training_config)
         print("Successfully uploaded to wandb!")
     except Exception as e:
         print(f"Error uploading to wandb: {e}")
