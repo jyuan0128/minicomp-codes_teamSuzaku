@@ -4,6 +4,7 @@
 """
 
 import json
+import yaml
 import os
 import glob
 import sys
@@ -95,14 +96,11 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
     representative_metric = []
     for result in all_results:
         if "metrics" in result:
-            print(result["task_name"])
-            print(result["metrics"].keys())
             for metric_name in result["metrics"].keys():
                 if task_metrics[result["task_name"]] == metric_name:
                     representative_metric.append(result["metrics"][metric_name])
                     rep_name = result["task_name"] + "/" + metric_name
                     eval_metrics[rep_name] = result["metrics"][metric_name]
-    print(representative_metric)
     eval_metrics["average"] = np.average(representative_metric, weights=weights)
     return eval_metrics
 
@@ -148,10 +146,6 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
         for k, v in detailed_log_paths.items() if v
     }
     
-    # 平均値をログ
-    if average_metrics:
-        wandb.log(average_metrics)
-    
     # サマリーテーブルを作成
     each_metrics_data = []
     for result in all_results:
@@ -173,15 +167,18 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
     
 
     # テーブルを作成してログ
-    if average_metrics_data:
-        table = wandb.Table(data=pd.DataFrame(average_metrics_data))
-        wandb.log({"Evaluation Average Score Table": table})
+    if log_training_config:
+        table = wandb.Table(dataframe=pd.DataFrame([log_training_config]))
+        wandb.log({"Training Config Table": table})
+        print("Training Config Table logged")
     if each_metrics_data:
         table = wandb.Table(dataframe=pd.DataFrame(each_metrics_data))
-        wandb.log({"Evaluation Metrics Table": table})
-    if log_training_config:
-        table = wandb.Table(dataframe=pd.DataFrame(log_training_config))
-        wandb.log({"Training Config Table": table})
+        wandb.log({"Detail Metrics Table": table})
+        print("Detail Metrics Table logged")
+    if average_metrics_data:
+        table = wandb.Table(data=pd.DataFrame(average_metrics_data))
+        wandb.log({"Evaluation Score Table": table})
+        print("Evaluation Score Table logged")
     if detailed_log_paths:
         df_list = []
         for task, path in detailed_log_paths.items():
@@ -192,9 +189,9 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
             )
             df["dataset"] = task
             df_list.append(df)
-            
         table = wandb.Table(dataframe=pd.concat(objs=df_list, ignore_index=True)[["dataset", "example", "predictions", "gold"]])
         wandb.log({"Evaluation Samples Table": table})
+        print("Evaluation Samples Table logged")
     
     wandb.finish()
 
@@ -203,8 +200,11 @@ def main():
     with open(training_config_path, "r") as f:
         training_config = json.load(f)
     run_name = training_config["run_name"]
+    with open("config.yaml", "r") as f:
+        generation_config = yaml.safe_load(f)["model_parameters"]["generation_parameters"]
+    training_config["generation_parameters"] = generation_config
     log_training_config = convert_train_params_to_flat(training_config)
-    
+
     """メイン関数"""
     # 評価対象のタスク
     tasks = ["gsm8k", "aime24", "gpqa-diamond", "truthfulqa-mc", "toxigen"]
