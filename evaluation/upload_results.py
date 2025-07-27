@@ -85,7 +85,7 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
         "gsm8k": "extractive_match",
         "aime24": "math_pass@1:1_samples",
         "gpqa-diamond": "gpqa_pass@1:1_samples",
-        "truthfulqa-mc": "mc_pass@1:1_samples",
+        "truthfulqa-mc": "truthfulqa_mc1",
         "toxigen": "acc_norm"
     } 
     weights = [0.3, 0.3, 0.3, 0.05, 0.05]
