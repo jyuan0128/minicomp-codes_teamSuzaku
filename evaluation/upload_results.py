@@ -137,9 +137,6 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
         for k, v in detailed_log_paths.items() if v
     }
     
-    # 平均値をログ
-    if average_metrics:
-        wandb.log(average_metrics)
     
     # サマリーテーブルを作成
     each_metrics_data = []
