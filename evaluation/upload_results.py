@@ -152,6 +152,7 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
     for result in all_results:
         if "metrics" in result:
             row = {
+                "run_name": run_name,
                 "task": result.get("task_name", "unknown"),
                 "model": result.get("model_name", "unknown"),
                 "evaluation_time": result.get("evaluation_time", "unknown")
