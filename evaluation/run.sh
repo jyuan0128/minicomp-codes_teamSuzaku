@@ -12,14 +12,14 @@ sanitize_task_name() {
 
 TASK="gsm8k"
 TASK_DIR=$(sanitize_task_name "$TASK")
-uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
+uv run lighteval vllm "eval_config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
     --save-details \
     --output-dir $OUTPUT_DIR/$TASK_DIR \
 
 TASK="aime24"
 TASK_DIR=$(sanitize_task_name "$TASK")
-uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
+uv run lighteval vllm "eval_config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
     --save-details \
     --output-dir $OUTPUT_DIR/$TASK_DIR
@@ -27,7 +27,7 @@ uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
 
 TASK="gpqa:diamond"
 TASK_DIR=$(sanitize_task_name "$TASK")
-uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
+uv run lighteval vllm "eval_config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
     --save-details \
     --output-dir $OUTPUT_DIR/$TASK_DIR
@@ -35,14 +35,14 @@ uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
 
 TASK="toxigen"
 TASK_DIR=$(sanitize_task_name "$TASK")
-uv run lighteval vllm "config.yaml" "lighteval|$TASK|0|0" \
+uv run lighteval vllm "eval_config.yaml" "lighteval|$TASK|0|0" \
     --use-chat-template \
     --save-details \
     --output-dir $OUTPUT_DIR/$TASK_DIR
 
 TASK="truthfulqa:mc"
 TASK_DIR=$(sanitize_task_name "$TASK")
-uv run lighteval vllm "config.yaml" "leaderboard|$TASK|0|0" \
+uv run lighteval vllm "eval_config.yaml" "leaderboard|$TASK|0|0" \
     --use-chat-template \
     --output-dir $OUTPUT_DIR/$TASK_DIR \
     --save-details \
