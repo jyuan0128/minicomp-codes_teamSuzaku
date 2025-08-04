@@ -119,7 +119,7 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
     """結果をwandbにアップロード"""
     # wandbの初期化
     wandb.init(
-        project="minicomp-test",
+        project="minicomp",
         entity="LLMcompe-Team-Watanabe",
         name=run_name,
         config={
