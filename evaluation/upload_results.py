@@ -90,6 +90,7 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
         "toxigen": "acc_norm"
     } 
     weights = [0.3, 0.3, 0.3, 0.05, 0.05]
+
     eval_metrics = {"average": 0.0}
 
     # 全メトリクス名を収集
@@ -103,6 +104,30 @@ def calculate_average_metrics(all_results: List[Dict[str, Any]]) -> Dict[str, fl
                     eval_metrics[rep_name] = result["metrics"][metric_name]
     eval_metrics["average"] = np.average(representative_metric, weights=weights)
     return eval_metrics
+
+def make_evaluation_sample_tables(log_path, task):
+    if task in ["toxigen", "truthfulqa-mc"]:
+        df = pd.read_parquet(log_path, columns=["example", "choices", "predictions", "gold_index"])
+
+        if task == "truthfulqa":
+            # Exampleにある7個のQ-A pairと8個目Qから、最後のQのみを抜き出す
+            df["question"] = df["example"].map(lambda x: "Question: " + re.findall("Q:\s*(.*)", x)[-1])
+        else:
+            df["question"] = df["example"].copy()
+            
+        df["formatted_choices"] = df["choices"].map(lambda x: "multiple-choice options are "+ "`" + "".join([f"{i}.{choice} " for i, choice in enumerate(x)]))[0] + "`"
+        df["example"] = df["question"] + "\n" +df["formatted_choices"]
+        df["gold"] = df["gold_index"].map(lambda x: str(x.tolist()) if isinstance(x, np.ndarray) else str(x))
+        df["predictions"] = df["predictions"].map(lambda x: str(x.tolist()) if isinstance(x, np.ndarray) else str(x))
+    else:
+        df = pd.read_parquet(log_path, columns=["example", "predictions", "gold"])
+        # wandbのUIで表示されるように、np.arrayからstringに変換
+        df[["example", "predictions", "gold"]] = df[["example", "predictions", "gold"]].applymap(
+            lambda x: "\n".join(x.tolist()) if isinstance(x, np.ndarray) else str(x)
+        )
+
+    df["dataset"] = task
+    return df
 
 def convert_train_params_to_flat(train_params: Dict[str, Any]) -> Dict[str, Any]:
     """train_paramsをフラットな形式に変換"""
@@ -119,7 +144,7 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
     """結果をwandbにアップロード"""
     # wandbの初期化
     wandb.init(
-        project="minicomp",
+        project="minicomp-test",
         entity="LLMcompe-Team-Watanabe",
         name=run_name,
         config={
@@ -186,18 +211,12 @@ def upload_to_wandb(run_name: str, all_results: List[Dict[str, Any]], average_me
     if detailed_log_paths:
         df_list = []
         for task, path in detailed_log_paths.items():
-            df = pd.read_parquet(path, columns=["example", "predictions", "gold"])
-            # wandbのUIで表示されるように、np.arrayからstringに変換
-            df[["example", "predictions", "gold"]] = df[["example", "predictions", "gold"]].applymap(
-                lambda x: "\n".join(x.tolist()) if isinstance(x, np.ndarray) else str(x)
-            )
-            df["dataset"] = task
+            df = make_evaluation_sample_tables(path, task)
             df_list.append(df)
         table = wandb.Table(dataframe=pd.concat(objs=df_list, ignore_index=True)[["dataset", "example", "predictions", "gold"]])
         wandb.log({"Evaluation Samples Table": table})
         print("Evaluation Samples Table logged")
-
-    
+            
     wandb.finish()
 
 def main():
@@ -213,6 +232,7 @@ def main():
     """メイン関数"""
     # 評価対象のタスク
     tasks = ["gsm8k", "aime24", "gpqa-diamond", "truthfulqa-mc", "toxigen"]
+
     
     print("Loading evaluation results...")
     
